@@ -427,6 +427,95 @@ p { color: var(--ink-soft); }
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ═══════════════════════════════════
+   VISUAL REPRESENTATIONS
+═══════════════════════════════════ */
+.visual-area {
+  width: 100%; display: flex; flex-direction: column; gap: 8px;
+}
+.visual-tabs {
+  display: flex; gap: 6px; justify-content: center;
+}
+.visual-tab {
+  padding: 5px 14px; border-radius: 20px; border: 1.5px solid var(--border);
+  background: var(--surface); font-family: var(--sans); font-size: 0.75rem;
+  font-weight: 700; cursor: pointer; transition: all 0.15s; color: var(--ink-soft);
+}
+.visual-tab.active { background: var(--accent); border-color: var(--accent); color: white; }
+.visual-panel { display: none; }
+.visual-panel.active { display: block; }
+
+/* ── CUISENAIRE RODS ── */
+.rods-container {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 16px 10px;
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+  min-height: 100px;
+}
+.rod-row {
+  display: flex; align-items: flex-end; gap: 4px; flex-wrap: nowrap;
+}
+.rod-label {
+  font-family: var(--mono); font-size: 0.68rem; color: var(--ink-soft);
+  min-width: 22px; text-align: right; padding-right: 6px; align-self: center;
+}
+.rod {
+  border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 0.6rem; font-weight: 700; color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  transition: all 0.35s cubic-bezier(0.34,1.56,0.64,1);
+  position: relative; overflow: hidden; flex-shrink: 0;
+  animation: rodPop 0.35s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes rodPop { from{transform:scaleY(0);transform-origin:bottom} to{transform:scaleY(1);transform-origin:bottom} }
+
+/* Official Cuisenaire colors */
+.rod[data-n="1"]  { background: #CCCCCC; color: #555; }
+.rod[data-n="2"]  { background: #E8001C; }
+.rod[data-n="3"]  { background: #7CBB00; }
+.rod[data-n="4"]  { background: #C000C0; }
+.rod[data-n="5"]  { background: #F5C800; color: #777; }
+.rod[data-n="6"]  { background: #1E8B1E; }
+.rod[data-n="7"]  { background: #222222; }
+.rod[data-n="8"]  { background: #8B4513; }
+.rod[data-n="9"]  { background: #003DA5; }
+.rod[data-n="10"] { background: #FF8C00; }
+.rod::after {
+  content:''; position:absolute; top:0; left:0; right:0; height:35%;
+  background: rgba(255,255,255,0.2); border-radius: 4px 4px 0 0; pointer-events:none;
+}
+
+.rod-op-symbol {
+  font-size: 1.2rem; font-weight: 900; align-self: center; margin: 0 6px; line-height:1;
+}
+.rod-op-symbol.plus  { color: var(--green); }
+.rod-op-symbol.minus { color: var(--red); }
+.rod-op-symbol.eq    { color: var(--ink-lighter); }
+
+.rod-result-row {
+  opacity: 0; transform: translateY(6px);
+  transition: opacity 0.4s 0.1s ease, transform 0.4s 0.1s ease;
+}
+.rod-result-row.visible { opacity:1; transform:translateY(0); }
+.rods-divider { width:100%; height:1px; background:var(--border); }
+
+/* ── NUMBER LINE ── */
+.numberline-container {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px 12px 8px;
+  overflow: hidden;
+}
+.numberline-svg-wrap { width: 100%; display: block; }
+
+/* feedback wrong answer overlay */
+.wrong-visual-hint {
+  background: var(--red-light); border: 2px solid var(--red);
+  border-radius: var(--radius-sm); padding: 8px 14px;
+  font-size: 0.82rem; font-weight: 700; color: var(--red);
+  display: flex; align-items: center; gap: 8px;
+  animation: slideIn 0.3s ease;
+}
 </style>
 </head>
 <body>
@@ -607,6 +696,24 @@ p { color: var(--ink-soft); }
   <div class="question-area">
     <div class="question-label" id="q-counter">Pregunta 1</div>
     <div class="question-expr" id="question-expr"></div>
+
+    <!-- Visual representations (only Worlds 1 & 2) -->
+    <div class="visual-area" id="visual-area" style="display:none">
+      <div class="visual-tabs">
+        <button class="visual-tab active" onclick="switchVisualTab('rods',this)">🎨 Regletes</button>
+        <button class="visual-tab" onclick="switchVisualTab('line',this)">📏 Recta numèrica</button>
+      </div>
+      <div class="visual-panel active" id="visual-rods">
+        <div class="rods-container" id="rods-container"></div>
+      </div>
+      <div class="visual-panel" id="visual-line">
+        <div class="numberline-container">
+          <svg class="numberline-svg-wrap" id="nl-svg" height="90"></svg>
+        </div>
+      </div>
+      <div id="wrong-hint-area"></div>
+    </div>
+
     <div class="answer-input-wrap">
       <input class="answer-input" id="answer-input" type="number" inputmode="numeric" pattern="[0-9]*" placeholder="?" autocomplete="off">
       <div class="feedback-text" id="feedback-text"></div>
@@ -1156,6 +1263,8 @@ function loadNextQuestion() {
   inp.value = ''; inp.className = 'answer-input';
   document.getElementById('feedback-text').textContent = '';
   document.getElementById('feedback-text').className = 'feedback-text';
+  clearWrongHint();
+  renderVisuals(gs.currentQ, false, null);
   inp.focus();
   startResponseBar();
 }
@@ -1210,8 +1319,10 @@ function submitAnswer() {
     updateStreakDots(gs.streak);
     if (gs.streak % 5 === 0) showCombo(`Combo x${gs.streak}! 🔥`);
     document.getElementById('game-score').textContent = gs.score;
+    // Show result in visuals briefly
+    renderVisuals(gs.currentQ, true, correct);
     gs.answering = true;
-    setTimeout(() => { gs.answering = false; loadNextQuestion(); }, 500);
+    setTimeout(() => { gs.answering = false; loadNextQuestion(); }, 600);
   } else {
     gs.wrong++; gs.streak = 0;
     p.opStats[key].wrong++;
@@ -1223,11 +1334,12 @@ function submitAnswer() {
     fb.textContent = `La resposta era ${correct}`;
     fb.className = 'feedback-text wrong';
     updateStreakDots(0);
+    showWrongHint(gs.currentQ, correct);
     gs.answering = true;
     setTimeout(() => {
       gs.answering = false; inp.value=''; inp.className='answer-input';
       fb.textContent=''; inp.focus(); startResponseBar();
-    }, 900);
+    }, 1800);
   }
   saveProfile(p);
 }
@@ -1445,8 +1557,342 @@ function presNext(isCorrect) {
 }
 
 // ══════════════════════════════════════════
-// UTILS
+// VISUAL REPRESENTATIONS — CUISENAIRE & NUMBER LINE
 // ══════════════════════════════════════════
+
+// Rod dimensions: fixed width, height proportional to value (like real Cuisenaire rods)
+const ROD_W = 22;       // fixed width in px (all rods same width)
+const ROD_H_UNIT = 16;  // px per unit of value (height grows with n)
+
+function rodColor(n) {
+  const colors = ['','#CCCCCC','#E8001C','#7CBB00','#C000C0','#F5C800','#1E8B1E','#222222','#8B4513','#003DA5','#FF8C00'];
+  return colors[Math.min(n, 10)] || '#999';
+}
+
+function makeRod(n, animated = true) {
+  const el = document.createElement('div');
+  el.className = 'rod';
+  el.setAttribute('data-n', Math.min(n, 10));
+  const h = Math.max(n, 1) * ROD_H_UNIT;
+  el.style.width  = ROD_W + 'px';
+  el.style.height = h + 'px';
+  if (n > 0 && n <= 10) el.style.background = rodColor(n);
+  if (!animated) el.style.animation = 'none';
+  return el;
+}
+
+function makeRodsForNumber(n) {
+  // Returns array of rod elements for number n (using 10s + units)
+  const rods = [];
+  const tens = Math.floor(n / 10);
+  const units = n % 10;
+  for (let i = 0; i < tens; i++) rods.push(makeRod(10));
+  if (units > 0) rods.push(makeRod(units));
+  if (n === 0) rods.push(makeRod(0)); // show a tiny placeholder
+  return rods;
+}
+
+let currentVisualTab = 'rods';
+let visualResultShown = false;
+
+function switchVisualTab(tab, btn) {
+  currentVisualTab = tab;
+  document.querySelectorAll('.visual-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.visual-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('visual-' + tab).classList.add('active');
+  // Redraw number line since SVG needs layout width
+  if (tab === 'line' && gameState.currentQ) {
+    renderNumberLine(gameState.currentQ, visualResultShown, visualResultShown ? (gameState.currentQ.op === 'sum' ? gameState.currentQ.a + gameState.currentQ.b : gameState.currentQ.a - gameState.currentQ.b) : null);
+  }
+}
+
+function shouldShowVisuals(world) {
+  return world === 1 || world === 2;
+}
+
+function renderVisuals(q, showResult, resultVal) {
+  const world = gameState.world;
+  const area = document.getElementById('visual-area');
+  if (!shouldShowVisuals(world)) { area.style.display = 'none'; return; }
+  area.style.display = 'flex';
+  visualResultShown = showResult;
+  renderRods(q, showResult, resultVal);
+  renderNumberLine(q, showResult, resultVal);
+}
+
+function renderRods(q, showResult, resultVal) {
+  const container = document.getElementById('rods-container');
+  container.innerHTML = '';
+
+  const isSum = q.op === 'sum';
+
+  if (isSum) {
+    // Row 1: rod A
+    const row1 = document.createElement('div');
+    row1.className = 'rod-row';
+    const lbl1 = document.createElement('div');
+    lbl1.className = 'rod-label'; lbl1.textContent = q.a;
+    row1.appendChild(lbl1);
+    makeRodsForNumber(q.a).forEach(r => row1.appendChild(r));
+    container.appendChild(row1);
+
+    // Op symbol
+    const opRow = document.createElement('div');
+    opRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding-left:28px';
+    const opSym = document.createElement('span');
+    opSym.className = 'rod-op-symbol plus'; opSym.textContent = '+';
+    opRow.appendChild(opSym);
+    container.appendChild(opRow);
+
+    // Row 2: rod B
+    const row2 = document.createElement('div');
+    row2.className = 'rod-row';
+    const lbl2 = document.createElement('div');
+    lbl2.className = 'rod-label'; lbl2.textContent = q.b;
+    row2.appendChild(lbl2);
+    makeRodsForNumber(q.b).forEach((r,i) => {
+      r.style.animationDelay = (i * 0.05) + 's';
+      row2.appendChild(r);
+    });
+    container.appendChild(row2);
+
+    if (showResult) {
+      const div = document.createElement('div'); div.className = 'rods-divider'; container.appendChild(div);
+      const rowEq = document.createElement('div');
+      rowEq.style.cssText = 'display:flex;align-items:center;gap:6px;padding-left:28px';
+      const eqSym = document.createElement('span');
+      eqSym.className = 'rod-op-symbol eq'; eqSym.textContent = '=';
+      rowEq.appendChild(eqSym);
+      container.appendChild(rowEq);
+
+      const rowR = document.createElement('div');
+      rowR.className = 'rod-row rod-result-row';
+      const lblR = document.createElement('div');
+      lblR.className = 'rod-label'; lblR.textContent = resultVal;
+      rowR.appendChild(lblR);
+      makeRodsForNumber(resultVal).forEach((r,i) => {
+        r.style.animationDelay = (i * 0.05 + 0.1) + 's';
+        rowR.appendChild(r);
+      });
+      container.appendChild(rowR);
+      requestAnimationFrame(() => requestAnimationFrame(() => rowR.classList.add('visible')));
+    }
+
+  } else {
+    // Subtraction: show A rod, then mark the part being removed
+    const row1 = document.createElement('div');
+    row1.className = 'rod-row';
+    const lbl1 = document.createElement('div');
+    lbl1.className = 'rod-label'; lbl1.textContent = q.a;
+    row1.appendChild(lbl1);
+    makeRodsForNumber(q.a).forEach(r => row1.appendChild(r));
+    container.appendChild(row1);
+
+    const opRow = document.createElement('div');
+    opRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding-left:28px';
+    const opSym = document.createElement('span');
+    opSym.className = 'rod-op-symbol minus'; opSym.textContent = '−';
+    opRow.appendChild(opSym);
+    container.appendChild(opRow);
+
+    const row2 = document.createElement('div');
+    row2.className = 'rod-row';
+    const lbl2 = document.createElement('div');
+    lbl2.className = 'rod-label'; lbl2.textContent = q.b;
+    row2.appendChild(lbl2);
+    makeRodsForNumber(q.b).forEach((r,i) => {
+      r.style.opacity = '0.5';
+      r.style.filter = 'grayscale(0.4)';
+      r.style.animationDelay = (i*0.05)+'s';
+      row2.appendChild(r);
+    });
+    container.appendChild(row2);
+
+    if (showResult) {
+      const div = document.createElement('div'); div.className = 'rods-divider'; container.appendChild(div);
+      const rowEq = document.createElement('div');
+      rowEq.style.cssText = 'display:flex;align-items:center;gap:6px;padding-left:28px';
+      const eqSym = document.createElement('span');
+      eqSym.className = 'rod-op-symbol eq'; eqSym.textContent = '=';
+      rowEq.appendChild(eqSym);
+      container.appendChild(rowEq);
+
+      const rowR = document.createElement('div');
+      rowR.className = 'rod-row rod-result-row';
+      const lblR = document.createElement('div');
+      lblR.className = 'rod-label'; lblR.textContent = resultVal;
+      rowR.appendChild(lblR);
+      makeRodsForNumber(resultVal).forEach((r,i) => {
+        r.style.animationDelay = (i*0.05+0.1)+'s';
+        rowR.appendChild(r);
+      });
+      container.appendChild(rowR);
+      requestAnimationFrame(() => requestAnimationFrame(() => rowR.classList.add('visible')));
+    }
+  }
+}
+
+function renderNumberLine(q, showResult, resultVal) {
+  const svg = document.getElementById('nl-svg');
+  svg.innerHTML = '';
+  const world = gameState.world;
+  const max = world === 1 ? 10 : 20;
+  const W = svg.parentElement.offsetWidth - 24;
+  if (W < 10) return;
+  const H = 90;
+  const padL = 16, padR = 16;
+  const lineY = 52;
+  const trackW = W - padL - padR;
+  svg.setAttribute('width', W);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+
+  // Determine which numbers to show on line
+  const step = trackW / max;
+
+  function xOf(n) { return padL + n * step; }
+
+  // Draw track
+  const track = document.createElementNS('http://www.w3.org/2000/svg','line');
+  track.setAttribute('x1', padL); track.setAttribute('y1', lineY);
+  track.setAttribute('x2', padL + trackW + 8); track.setAttribute('y2', lineY);
+  track.setAttribute('stroke','var(--ink-lighter)'); track.setAttribute('stroke-width','2');
+  svg.appendChild(track);
+
+  // Arrow
+  const arr = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  const ax = padL + trackW + 8;
+  arr.setAttribute('points', `${ax},${lineY} ${ax-6},${lineY-4} ${ax-6},${lineY+4}`);
+  arr.setAttribute('fill','var(--ink-lighter)');
+  svg.appendChild(arr);
+
+  // Ticks and labels
+  for (let i = 0; i <= max; i++) {
+    const x = xOf(i);
+    const isMajor = (i % 5 === 0) || max <= 10;
+    const tick = document.createElementNS('http://www.w3.org/2000/svg','line');
+    tick.setAttribute('x1', x); tick.setAttribute('y1', lineY - (isMajor ? 6 : 3));
+    tick.setAttribute('x2', x); tick.setAttribute('y2', lineY + (isMajor ? 6 : 3));
+    tick.setAttribute('stroke', isMajor ? 'var(--ink-soft)' : 'var(--ink-lighter)');
+    tick.setAttribute('stroke-width', isMajor ? '2' : '1');
+    svg.appendChild(tick);
+
+    if (isMajor || max <= 10) {
+      const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+      lbl.setAttribute('x', x); lbl.setAttribute('y', lineY + 18);
+      lbl.setAttribute('text-anchor','middle');
+      lbl.setAttribute('font-family','DM Mono, monospace');
+      lbl.setAttribute('font-size', isMajor ? '11' : '9');
+      lbl.setAttribute('fill', isMajor ? 'var(--ink)' : 'var(--ink-soft)');
+      lbl.textContent = i;
+      svg.appendChild(lbl);
+    }
+  }
+
+  const isSum = q.op === 'sum';
+  const result = isSum ? q.a + q.b : q.a - q.b;
+
+  // Clamp for display (don't exceed max)
+  const clampedA = Math.min(q.a, max);
+  const clampedB = Math.min(q.b, max);
+  const clampedResult = Math.min(Math.max(result, 0), max);
+
+  function drawArc(x1, x2, color, dashArray, delay) {
+    if (Math.abs(x2 - x1) < 1) return null;
+    const midX = (x1 + x2) / 2;
+    const span = Math.abs(x2 - x1);
+    const arcH = Math.min(span * 0.45, lineY - 12);
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    const d = `M ${x1} ${lineY} Q ${midX} ${lineY - arcH} ${x2} ${lineY}`;
+    path.setAttribute('d', d);
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width','2.5');
+    path.setAttribute('stroke-linecap','round');
+    if (dashArray) path.setAttribute('stroke-dasharray', dashArray);
+    // Animate
+    const len = Math.ceil(Math.sqrt(span*span + arcH*arcH) * 1.6);
+    path.setAttribute('stroke-dasharray', len);
+    path.setAttribute('stroke-dashoffset', len);
+    path.style.opacity = '0';
+    svg.appendChild(path);
+    setTimeout(() => {
+      path.style.transition = `stroke-dashoffset 0.45s ease, opacity 0.2s ease`;
+      path.style.opacity = '1';
+      path.setAttribute('stroke-dashoffset', '0');
+    }, delay);
+    return path;
+  }
+
+  function drawDot(x, y, color, r = 5) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r);
+    c.setAttribute('fill', color);
+    svg.appendChild(c);
+    return c;
+  }
+
+  function drawLabel(x, y, text, color) {
+    const t = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    t.setAttribute('text-anchor','middle');
+    t.setAttribute('font-family','DM Mono, monospace');
+    t.setAttribute('font-size','11'); t.setAttribute('font-weight','bold');
+    t.setAttribute('fill', color); t.style.opacity = '0';
+    t.textContent = text;
+    svg.appendChild(t);
+    setTimeout(() => {
+      t.style.transition = 'opacity 0.3s ease';
+      t.style.opacity = '1';
+    }, 500);
+  }
+
+  if (isSum) {
+    // Start dot at 0
+    drawDot(xOf(0), lineY, 'var(--ink-lighter)', 3);
+    // Arc from 0 to A
+    drawArc(xOf(0), xOf(clampedA), 'var(--accent)', null, 50);
+    // Dot at A
+    setTimeout(() => drawDot(xOf(clampedA), lineY, 'var(--accent)'), 400);
+    drawLabel(xOf(clampedA), lineY - 10, q.a, 'var(--accent)');
+
+    if (showResult) {
+      // Arc from A to A+B
+      drawArc(xOf(clampedA), xOf(clampedResult), 'var(--green)', null, 600);
+      setTimeout(() => drawDot(xOf(clampedResult), lineY, 'var(--green)'), 950);
+      drawLabel(xOf(clampedResult), lineY - 10, result, 'var(--green)');
+    }
+  } else {
+    // Subtraction: start at A, jump back B
+    drawDot(xOf(0), lineY, 'var(--ink-lighter)', 3);
+    // Draw A position first
+    drawArc(xOf(0), xOf(clampedA), 'var(--accent)', null, 50);
+    setTimeout(() => drawDot(xOf(clampedA), lineY, 'var(--accent)'), 400);
+    drawLabel(xOf(clampedA), lineY - 10, q.a, 'var(--accent)');
+
+    if (showResult) {
+      // Arc going LEFT from A to A-B
+      drawArc(xOf(clampedA), xOf(clampedResult), 'var(--red)', null, 600);
+      setTimeout(() => drawDot(xOf(clampedResult), lineY, 'var(--red)'), 950);
+      drawLabel(xOf(clampedResult), lineY - 10, result, 'var(--red)');
+    }
+  }
+}
+
+function showWrongHint(q, correct) {
+  const area = document.getElementById('wrong-hint-area');
+  if (!shouldShowVisuals(gameState.world)) { area.innerHTML = ''; return; }
+  const sym = q.op === 'sum' ? '+' : '−';
+  area.innerHTML = `<div class="wrong-visual-hint">
+    👆 Mira les regletes: ${q.a} ${sym} ${q.b} = <strong>${correct}</strong>
+  </div>`;
+  // Show result in visuals
+  renderVisuals(q, true, correct);
+}
+
+function clearWrongHint() {
+  document.getElementById('wrong-hint-area').innerHTML = '';
+}
 function goTo(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
