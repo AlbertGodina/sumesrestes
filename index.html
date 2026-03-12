@@ -1624,112 +1624,106 @@ function renderVisuals(q, showResult, resultVal) {
 function renderRods(q, showResult, resultVal) {
   const container = document.getElementById('rods-container');
   container.innerHTML = '';
+  container.style.flexDirection = 'column';
+  container.style.alignItems = 'flex-start';
 
   const isSum = q.op === 'sum';
 
+  // ── Top row: labels ──
+  function makeLabel(text, color, widthPx) {
+    const lbl = document.createElement('div');
+    lbl.style.cssText = `width:${widthPx}px; text-align:center; font-family:var(--mono);
+      font-size:0.72rem; font-weight:700; color:${color}; flex-shrink:0;`;
+    lbl.textContent = text;
+    return lbl;
+  }
+
+  function rodGroupWidth(n) {
+    // total pixel width of all rods for number n (with gaps)
+    const tens = Math.floor(n / 10);
+    const units = n % 10;
+    const count = tens + (units > 0 ? 1 : 0) || 1;
+    return count * ROD_W + (count - 1) * 4;
+  }
+
+  const wA = rodGroupWidth(q.a);
+  const wB = rodGroupWidth(q.b);
+  const GAP = 10; // gap between A and B groups
+
+  // ── Label row ──
+  const labelRow = document.createElement('div');
+  labelRow.style.cssText = `display:flex; align-items:flex-end; gap:${GAP}px; padding-left:4px;`;
+  labelRow.appendChild(makeLabel(q.a, 'var(--accent)', wA));
+
   if (isSum) {
-    // Row 1: rod A
-    const row1 = document.createElement('div');
-    row1.className = 'rod-row';
-    const lbl1 = document.createElement('div');
-    lbl1.className = 'rod-label'; lbl1.textContent = q.a;
-    row1.appendChild(lbl1);
-    makeRodsForNumber(q.a).forEach(r => row1.appendChild(r));
-    container.appendChild(row1);
-
-    // Op symbol
-    const opRow = document.createElement('div');
-    opRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding-left:28px';
-    const opSym = document.createElement('span');
-    opSym.className = 'rod-op-symbol plus'; opSym.textContent = '+';
-    opRow.appendChild(opSym);
-    container.appendChild(opRow);
-
-    // Row 2: rod B
-    const row2 = document.createElement('div');
-    row2.className = 'rod-row';
-    const lbl2 = document.createElement('div');
-    lbl2.className = 'rod-label'; lbl2.textContent = q.b;
-    row2.appendChild(lbl2);
-    makeRodsForNumber(q.b).forEach((r,i) => {
-      r.style.animationDelay = (i * 0.05) + 's';
-      row2.appendChild(r);
-    });
-    container.appendChild(row2);
-
-    if (showResult) {
-      const div = document.createElement('div'); div.className = 'rods-divider'; container.appendChild(div);
-      const rowEq = document.createElement('div');
-      rowEq.style.cssText = 'display:flex;align-items:center;gap:6px;padding-left:28px';
-      const eqSym = document.createElement('span');
-      eqSym.className = 'rod-op-symbol eq'; eqSym.textContent = '=';
-      rowEq.appendChild(eqSym);
-      container.appendChild(rowEq);
-
-      const rowR = document.createElement('div');
-      rowR.className = 'rod-row rod-result-row';
-      const lblR = document.createElement('div');
-      lblR.className = 'rod-label'; lblR.textContent = resultVal;
-      rowR.appendChild(lblR);
-      makeRodsForNumber(resultVal).forEach((r,i) => {
-        r.style.animationDelay = (i * 0.05 + 0.1) + 's';
-        rowR.appendChild(r);
-      });
-      container.appendChild(rowR);
-      requestAnimationFrame(() => requestAnimationFrame(() => rowR.classList.add('visible')));
-    }
-
+    const opLbl = document.createElement('div');
+    opLbl.style.cssText = 'font-size:1rem;font-weight:900;color:var(--green);align-self:center;line-height:1;width:14px;text-align:center;';
+    opLbl.textContent = '+';
+    labelRow.appendChild(opLbl);
   } else {
-    // Subtraction: show A rod, then mark the part being removed
-    const row1 = document.createElement('div');
-    row1.className = 'rod-row';
-    const lbl1 = document.createElement('div');
-    lbl1.className = 'rod-label'; lbl1.textContent = q.a;
-    row1.appendChild(lbl1);
-    makeRodsForNumber(q.a).forEach(r => row1.appendChild(r));
-    container.appendChild(row1);
+    const opLbl = document.createElement('div');
+    opLbl.style.cssText = 'font-size:1rem;font-weight:900;color:var(--red);align-self:center;line-height:1;width:14px;text-align:center;';
+    opLbl.textContent = '−';
+    labelRow.appendChild(opLbl);
+  }
 
-    const opRow = document.createElement('div');
-    opRow.style.cssText = 'display:flex;align-items:center;gap:6px;padding-left:28px';
-    const opSym = document.createElement('span');
-    opSym.className = 'rod-op-symbol minus'; opSym.textContent = '−';
-    opRow.appendChild(opSym);
-    container.appendChild(opRow);
+  labelRow.appendChild(makeLabel(q.b, isSum ? 'var(--green)' : 'var(--red)', wB));
+  container.appendChild(labelRow);
 
-    const row2 = document.createElement('div');
-    row2.className = 'rod-row';
-    const lbl2 = document.createElement('div');
-    lbl2.className = 'rod-label'; lbl2.textContent = q.b;
-    row2.appendChild(lbl2);
-    makeRodsForNumber(q.b).forEach((r,i) => {
-      r.style.opacity = '0.5';
-      r.style.filter = 'grayscale(0.4)';
-      r.style.animationDelay = (i*0.05)+'s';
-      row2.appendChild(r);
-    });
-    container.appendChild(row2);
+  // ── Rod row: A rods + gap + B rods, all aligned at bottom ──
+  const rodRow = document.createElement('div');
+  rodRow.style.cssText = `display:flex; align-items:flex-end; gap:4px; padding-left:4px;`;
 
-    if (showResult) {
-      const div = document.createElement('div'); div.className = 'rods-divider'; container.appendChild(div);
-      const rowEq = document.createElement('div');
-      rowEq.style.cssText = 'display:flex;align-items:center;gap:6px;padding-left:28px';
-      const eqSym = document.createElement('span');
-      eqSym.className = 'rod-op-symbol eq'; eqSym.textContent = '=';
-      rowEq.appendChild(eqSym);
-      container.appendChild(rowEq);
+  // Rods A
+  makeRodsForNumber(q.a).forEach((r, i) => {
+    r.style.animationDelay = (i * 0.06) + 's';
+    rodRow.appendChild(r);
+  });
 
-      const rowR = document.createElement('div');
-      rowR.className = 'rod-row rod-result-row';
-      const lblR = document.createElement('div');
-      lblR.className = 'rod-label'; lblR.textContent = resultVal;
-      rowR.appendChild(lblR);
-      makeRodsForNumber(resultVal).forEach((r,i) => {
-        r.style.animationDelay = (i*0.05+0.1)+'s';
-        rowR.appendChild(r);
-      });
-      container.appendChild(rowR);
-      requestAnimationFrame(() => requestAnimationFrame(() => rowR.classList.add('visible')));
+  // Spacer between groups
+  const spacer = document.createElement('div');
+  spacer.style.cssText = `width:${GAP + 14}px; flex-shrink:0;`; // GAP + op symbol width
+  rodRow.appendChild(spacer);
+
+  // Rods B
+  makeRodsForNumber(q.b).forEach((r, i) => {
+    if (!isSum) {
+      r.style.opacity = '0.45';
+      r.style.filter = 'grayscale(0.5)';
     }
+    r.style.animationDelay = (i * 0.06 + 0.15) + 's';
+    rodRow.appendChild(r);
+  });
+
+  container.appendChild(rodRow);
+
+  // ── Result row (shown after correct/wrong) ──
+  if (showResult) {
+    const divider = document.createElement('div');
+    divider.className = 'rods-divider';
+    divider.style.margin = '4px 0';
+    container.appendChild(divider);
+
+    const wR = rodGroupWidth(resultVal);
+    const resultLabelRow = document.createElement('div');
+    resultLabelRow.style.cssText = 'display:flex;align-items:flex-end;gap:4px;padding-left:4px;opacity:0;transform:translateY(6px);transition:opacity 0.4s 0.1s ease,transform 0.4s 0.1s ease;';
+    resultLabelRow.appendChild(makeLabel('= ' + resultVal, 'var(--green)', wR + 24));
+    container.appendChild(resultLabelRow);
+
+    const resultRodRow = document.createElement('div');
+    resultRodRow.style.cssText = 'display:flex;align-items:flex-end;gap:4px;padding-left:4px;opacity:0;transform:translateY(6px);transition:opacity 0.4s 0.15s ease,transform 0.4s 0.15s ease;';
+    makeRodsForNumber(resultVal).forEach((r, i) => {
+      r.style.animationDelay = (i * 0.06 + 0.1) + 's';
+      resultRodRow.appendChild(r);
+    });
+    container.appendChild(resultRodRow);
+
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      resultLabelRow.style.opacity = '1';
+      resultLabelRow.style.transform = 'translateY(0)';
+      resultRodRow.style.opacity = '1';
+      resultRodRow.style.transform = 'translateY(0)';
+    }));
   }
 }
 
