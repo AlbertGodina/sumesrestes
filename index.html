@@ -1738,52 +1738,59 @@ function renderNumberLine(q, showResult, resultVal) {
   svg.innerHTML = '';
   const world = gameState.world;
   const max = world === 1 ? 10 : 20;
-  const W = svg.parentElement.offsetWidth - 24;
+  const W = svg.parentElement.offsetWidth - 8;
   if (W < 10) return;
-  const H = 90;
-  const padL = 16, padR = 16;
-  const lineY = 52;
+
+  // Layout: two arrow rows above the line + line + labels below
+  // Row heights: arrowY1 (first arrow), arrowY2 (second arrow), lineY, labelY
+  const H = 100;
+  const padL = 20, padR = 20;
+  const lineY = 68;
+  const arrowY1 = 28;   // first arrow (0→A for sum; 0→A for sub)
+  const arrowY2 = 50;   // second arrow (A→result)
+  const labelY = lineY + 18;
   const trackW = W - padL - padR;
   svg.setAttribute('width', W);
+  svg.setAttribute('height', H);
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
-  // Determine which numbers to show on line
   const step = trackW / max;
-
   function xOf(n) { return padL + n * step; }
 
-  // Draw track
+  // ── Draw number line track ──
   const track = document.createElementNS('http://www.w3.org/2000/svg','line');
-  track.setAttribute('x1', padL); track.setAttribute('y1', lineY);
-  track.setAttribute('x2', padL + trackW + 8); track.setAttribute('y2', lineY);
-  track.setAttribute('stroke','var(--ink-lighter)'); track.setAttribute('stroke-width','2');
+  track.setAttribute('x1', padL - 4); track.setAttribute('y1', lineY);
+  track.setAttribute('x2', padL + trackW + 10); track.setAttribute('y2', lineY);
+  track.setAttribute('stroke','var(--ink-soft)'); track.setAttribute('stroke-width','2');
   svg.appendChild(track);
 
-  // Arrow
-  const arr = document.createElementNS('http://www.w3.org/2000/svg','polygon');
-  const ax = padL + trackW + 8;
-  arr.setAttribute('points', `${ax},${lineY} ${ax-6},${lineY-4} ${ax-6},${lineY+4}`);
-  arr.setAttribute('fill','var(--ink-lighter)');
-  svg.appendChild(arr);
+  // Arrowhead at end of line
+  const ax = padL + trackW + 10;
+  const arrEnd = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  arrEnd.setAttribute('points', `${ax+6},${lineY} ${ax},${lineY-4} ${ax},${lineY+4}`);
+  arrEnd.setAttribute('fill','var(--ink-soft)');
+  svg.appendChild(arrEnd);
 
-  // Ticks and labels
+  // ── Ticks and labels ──
   for (let i = 0; i <= max; i++) {
     const x = xOf(i);
-    const isMajor = (i % 5 === 0) || max <= 10;
+    const isMajor = max <= 10 || i % 5 === 0;
+    const tickH = isMajor ? 7 : 4;
     const tick = document.createElementNS('http://www.w3.org/2000/svg','line');
-    tick.setAttribute('x1', x); tick.setAttribute('y1', lineY - (isMajor ? 6 : 3));
-    tick.setAttribute('x2', x); tick.setAttribute('y2', lineY + (isMajor ? 6 : 3));
-    tick.setAttribute('stroke', isMajor ? 'var(--ink-soft)' : 'var(--ink-lighter)');
+    tick.setAttribute('x1', x); tick.setAttribute('y1', lineY - tickH);
+    tick.setAttribute('x2', x); tick.setAttribute('y2', lineY + tickH);
+    tick.setAttribute('stroke', isMajor ? 'var(--ink)' : 'var(--ink-lighter)');
     tick.setAttribute('stroke-width', isMajor ? '2' : '1');
     svg.appendChild(tick);
 
-    if (isMajor || max <= 10) {
+    if (max <= 10 || i % 5 === 0) {
       const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
-      lbl.setAttribute('x', x); lbl.setAttribute('y', lineY + 18);
+      lbl.setAttribute('x', x); lbl.setAttribute('y', labelY);
       lbl.setAttribute('text-anchor','middle');
       lbl.setAttribute('font-family','DM Mono, monospace');
-      lbl.setAttribute('font-size', isMajor ? '11' : '9');
-      lbl.setAttribute('fill', isMajor ? 'var(--ink)' : 'var(--ink-soft)');
+      lbl.setAttribute('font-size','11');
+      lbl.setAttribute('font-weight', isMajor ? 'bold' : 'normal');
+      lbl.setAttribute('fill', 'var(--ink)');
       lbl.textContent = i;
       svg.appendChild(lbl);
     }
@@ -1791,90 +1798,104 @@ function renderNumberLine(q, showResult, resultVal) {
 
   const isSum = q.op === 'sum';
   const result = isSum ? q.a + q.b : q.a - q.b;
-
-  // Clamp for display (don't exceed max)
-  const clampedA = Math.min(q.a, max);
-  const clampedB = Math.min(q.b, max);
+  const clampedA      = Math.min(q.a, max);
   const clampedResult = Math.min(Math.max(result, 0), max);
 
-  function drawArc(x1, x2, color, dashArray, delay) {
-    if (Math.abs(x2 - x1) < 1) return null;
-    const midX = (x1 + x2) / 2;
-    const span = Math.abs(x2 - x1);
-    const arcH = Math.min(span * 0.45, lineY - 12);
-    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    const d = `M ${x1} ${lineY} Q ${midX} ${lineY - arcH} ${x2} ${lineY}`;
-    path.setAttribute('d', d);
-    path.setAttribute('fill','none');
-    path.setAttribute('stroke', color);
-    path.setAttribute('stroke-width','2.5');
-    path.setAttribute('stroke-linecap','round');
-    if (dashArray) path.setAttribute('stroke-dasharray', dashArray);
-    // Animate
-    const len = Math.ceil(Math.sqrt(span*span + arcH*arcH) * 1.6);
-    path.setAttribute('stroke-dasharray', len);
-    path.setAttribute('stroke-dashoffset', len);
-    path.style.opacity = '0';
-    svg.appendChild(path);
+  // ── Helper: animated horizontal arrow ──
+  // x1→x2 at height y, color, arrowhead at end, animated grow from x1
+  function drawArrow(x1, x2, y, color, delay, thick = 3) {
+    if (Math.abs(x2 - x1) < 2) return;
+    const goRight = x2 > x1;
+    const tipX = goRight ? x2 : x2;
+
+    // Line (animated via stroke-dasharray)
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y);
+    line.setAttribute('stroke', color);
+    line.setAttribute('stroke-width', thick);
+    line.setAttribute('stroke-linecap','round');
+    const len = Math.abs(x2 - x1);
+    line.setAttribute('stroke-dasharray', len);
+    line.setAttribute('stroke-dashoffset', len);
+    line.style.opacity = '0';
+    svg.appendChild(line);
+
+    // Arrowhead triangle
+    const sz = 7;
+    const headX = goRight ? tipX : tipX;
+    const pts = goRight
+      ? `${headX},${y} ${headX-sz},${y-sz/2} ${headX-sz},${y+sz/2}`
+      : `${headX},${y} ${headX+sz},${y-sz/2} ${headX+sz},${y+sz/2}`;
+    const head = document.createElementNS('http://www.w3.org/2000/svg','polygon');
+    head.setAttribute('points', pts);
+    head.setAttribute('fill', color);
+    head.style.opacity = '0';
+    svg.appendChild(head);
+
     setTimeout(() => {
-      path.style.transition = `stroke-dashoffset 0.45s ease, opacity 0.2s ease`;
-      path.style.opacity = '1';
-      path.setAttribute('stroke-dashoffset', '0');
+      line.style.transition = `stroke-dashoffset 0.4s ease, opacity 0.15s ease`;
+      line.style.opacity = '1';
+      line.setAttribute('stroke-dashoffset', '0');
+      head.style.transition = `opacity 0.2s ease 0.35s`;
+      head.style.opacity = '1';
     }, delay);
-    return path;
   }
 
-  function drawDot(x, y, color, r = 5) {
-    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', r);
-    c.setAttribute('fill', color);
-    svg.appendChild(c);
-    return c;
-  }
-
-  function drawLabel(x, y, text, color) {
+  // ── Helper: value label above a point ──
+  function drawValLabel(x, y, text, color, delay) {
     const t = document.createElementNS('http://www.w3.org/2000/svg','text');
     t.setAttribute('x', x); t.setAttribute('y', y);
     t.setAttribute('text-anchor','middle');
     t.setAttribute('font-family','DM Mono, monospace');
     t.setAttribute('font-size','11'); t.setAttribute('font-weight','bold');
-    t.setAttribute('fill', color); t.style.opacity = '0';
+    t.setAttribute('fill', color);
+    t.style.opacity = '0';
     t.textContent = text;
     svg.appendChild(t);
-    setTimeout(() => {
-      t.style.transition = 'opacity 0.3s ease';
-      t.style.opacity = '1';
-    }, 500);
+    setTimeout(() => { t.style.transition='opacity 0.25s ease'; t.style.opacity='1'; }, delay);
   }
 
+  // ── Helper: dot on the line ──
+  function drawDot(x, color, delay, r = 5) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('cx', x); c.setAttribute('cy', lineY); c.setAttribute('r', r);
+    c.setAttribute('fill', color);
+    c.style.opacity = '0';
+    svg.appendChild(c);
+    setTimeout(() => { c.style.transition='opacity 0.2s ease'; c.style.opacity='1'; }, delay);
+  }
+
+  // ── Draw origin dot ──
+  drawDot(xOf(0), 'var(--ink-lighter)', 0, 3);
+
   if (isSum) {
-    // Start dot at 0
-    drawDot(xOf(0), lineY, 'var(--ink-lighter)', 3);
-    // Arc from 0 to A
-    drawArc(xOf(0), xOf(clampedA), 'var(--accent)', null, 50);
-    // Dot at A
-    setTimeout(() => drawDot(xOf(clampedA), lineY, 'var(--accent)'), 400);
-    drawLabel(xOf(clampedA), lineY - 10, q.a, 'var(--accent)');
+    // Arrow 1 (blue): 0 → A  at arrowY1
+    drawArrow(xOf(0), xOf(clampedA), arrowY1, 'var(--accent)', 50);
+    drawValLabel(xOf(clampedA), arrowY1 - 6, `+${q.a}`, 'var(--accent)', 300);
+    drawDot(xOf(clampedA), 'var(--accent)', 450);
 
     if (showResult) {
-      // Arc from A to A+B
-      drawArc(xOf(clampedA), xOf(clampedResult), 'var(--green)', null, 600);
-      setTimeout(() => drawDot(xOf(clampedResult), lineY, 'var(--green)'), 950);
-      drawLabel(xOf(clampedResult), lineY - 10, result, 'var(--green)');
+      // Arrow 2 (green): A → result  at arrowY2
+      drawArrow(xOf(clampedA), xOf(clampedResult), arrowY2, 'var(--green)', 600);
+      drawValLabel(xOf(clampedA) + (xOf(clampedResult)-xOf(clampedA))/2, arrowY2 - 6, `+${q.b}`, 'var(--green)', 850);
+      drawDot(xOf(clampedResult), 'var(--green)', 950);
+      drawValLabel(xOf(clampedResult), lineY - 12, `${result}`, 'var(--green)', 1000);
     }
   } else {
-    // Subtraction: start at A, jump back B
-    drawDot(xOf(0), lineY, 'var(--ink-lighter)', 3);
-    // Draw A position first
-    drawArc(xOf(0), xOf(clampedA), 'var(--accent)', null, 50);
-    setTimeout(() => drawDot(xOf(clampedA), lineY, 'var(--accent)'), 400);
-    drawLabel(xOf(clampedA), lineY - 10, q.a, 'var(--accent)');
+    // Subtraction:
+    // Arrow 1 (blue): 0 → A  at arrowY1
+    drawArrow(xOf(0), xOf(clampedA), arrowY1, 'var(--accent)', 50);
+    drawValLabel(xOf(clampedA)/2 + xOf(0)/2, arrowY1 - 6, `+${q.a}`, 'var(--accent)', 300);
+    drawDot(xOf(clampedA), 'var(--accent)', 450);
 
     if (showResult) {
-      // Arc going LEFT from A to A-B
-      drawArc(xOf(clampedA), xOf(clampedResult), 'var(--red)', null, 600);
-      setTimeout(() => drawDot(xOf(clampedResult), lineY, 'var(--red)'), 950);
-      drawLabel(xOf(clampedResult), lineY - 10, result, 'var(--red)');
+      // Arrow 2 (red): A → result (going LEFT)  at arrowY2
+      drawArrow(xOf(clampedA), xOf(clampedResult), arrowY2, 'var(--red)', 600);
+      const midX = (xOf(clampedA) + xOf(clampedResult)) / 2;
+      drawValLabel(midX, arrowY2 - 6, `−${q.b}`, 'var(--red)', 850);
+      drawDot(xOf(clampedResult), 'var(--red)', 950);
+      drawValLabel(xOf(clampedResult), lineY - 12, `${result}`, 'var(--red)', 1000);
     }
   }
 }
